@@ -1,7 +1,7 @@
 
 <html>
     <script src="//js.leapmotion.com/0.2.0/leap.min.js"></script>
-    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+    <!--    <script src="sparks.js"></script> -->
     <style>
         body {
             margin: 0px;
@@ -84,6 +84,11 @@
         var attributes;
         var corona_sprite;
         var star_size=200;
+        var primed = false;
+        var spread;
+        var allow_scale = true;
+
+        var lensFlare;
 
         var point_count = 20000;
         var using_shaders = true;
@@ -95,7 +100,8 @@
 
         var time = Date.now() * 0.005;
 
-        var scale = 1
+        var scale = 1;
+        var bounded = true;
 
         init();
         animate();
@@ -182,6 +188,12 @@
             scene.add(skybox);
         };
 
+        function onWindowResize( event ) {
+                renderer.setSize( window.innerWidth, window.innerHeight );
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+        }
+
         function init_threejs() {
             // Create a camera above the scene plane at 1000 units
             camera = new THREE.PerspectiveCamera( 40, window.innerWidth / window.innerHeight, 0.1, 10000 );
@@ -192,6 +204,7 @@
             renderer = new THREE.WebGLRenderer();
             renderer.setClearColor(new THREE.Color(0, 1));
             renderer.setSize( window.innerWidth, window.innerHeight );
+            window.addEventListener( 'resize', onWindowResize, false );
 
         };
 
@@ -226,8 +239,8 @@
             flareColor = new THREE.Color(0xffffff);
             flareColor.setHSL(star_hue, 0.9, 1);
 
-            var lensFlare = new THREE.LensFlare( textureFlare0, 800, 0.0, THREE.AdditiveBlending, flareColor );
-            lensFlare.position.z = 201;
+            lensFlare = new THREE.LensFlare( textureFlare0, 1000, 0.0, THREE.AdditiveBlending, flareColor );
+            lensFlare.position.z = 301;
             
             scene.add(lensFlare);
 
@@ -329,10 +342,8 @@
         };
 
         function shift_corona() {
-//            corona_uniforms.time.value = Math.sin(1/6*time)/10 + 0.8;
-//            console.log(corona_uniforms.time.value);
             corona_uniforms.time.value = Math.sin(1/3*time)*0.1 + 0.5;
-           corona_uniforms.time.needsUpdate = true;
+            corona_uniforms.time.needsUpdate = true;
         }
 
         function update_star_age() {
@@ -369,24 +380,44 @@
             flareColor.setHSL( hue, 0.8, val);
 
             // scale the star
-            if (star_age > 0.3) {
-                var factor = (star_age - 0.3) / 0.7;
-                scale_star(1 + factor * 0.5);
-            } else {
+            if (star_age > 0.9) {
                 scale_star(scale);
+                console.log(scale);
+            }
+            else if (star_age > 0.3) {
+                var factor = (star_age - 0.3) / 0.7;
+                scale = 1 + factor * 0.5;
+                scale_star(scale);
+            } else {
+                scale_star(1);
             }
         };
 
         function scale_star(factor) {
-            if (factor > 1.5) {
+            if (!allow_scale) {
+                return;
+            }
+            if (factor > 1.5 && bounded === true) {
                 factor = 1.5;
             }
 
-            console.log("scaling star")
             // Scale the star_mesh, the particle_mesh, and the corona_mesh
             star_mesh.scale.set(factor, factor, factor);
             particle_mesh.scale.set(factor, factor, factor);
             corona_mesh.scale.set(factor, factor, factor);
+            lensFlare.scale.set(factor, factor, factor);
+
+            if (factor > 1.7) {
+                primed = true;
+            }
+            if (factor < 0.5 && primed) {
+                explode();
+            }
+        }
+
+        function explode() {
+            allow_scale = false; 
+            scene.remove(star_mesh);
         }
 
         function update_scene() {
@@ -431,17 +462,11 @@
             console.log(star_age);
         }
 
-        Leap.loop({enableGestures: true}, function(obj) {
-            if (obj.gestures.length > 0) {
-                    obj.gestures.forEach(function(gesture) {
-                        if (gesture.type == "circle") {
-                            handle_circle(gesture);
-                        }
-                });
-            }
-            if (obj.hands.length == 2) {
-                var hand1 = obj.hands[0];
-                var hand2 = obj.hands[1];
+        function handle_hand_scaling(frame) {
+            if (frame.hands.length == 2 && star_age > 0.9) {
+                bounded = false;
+                var hand1 = frame.hands[0];
+                var hand2 = frame.hands[1];
 
                 var hand1Center = hand1.sphereCenter
                 var hand2Center = hand2.sphereCenter
@@ -450,15 +475,30 @@
                 var yd = hand1Center[1] - hand2Center[1]
                 var zd = hand1Center[2] - hand2Center[2]
 
-                var handDistance = Math.sqrt(xd*xd + yd*yd + zd*zd)
+                var handDistance = Math.sqrt(xd*xd + yd*yd + zd*zd);
+                if (spread === null) {
+                    spread = handDistance;
+                }
 
-                console.log(handDistance)
-
-                var normalizedFactor = (handDistance - 30)/(350) + .5
-                console.log(normalizedFactor);
-
-                scale = normalizedFactor
+//                var normalizedFactor = (handDistance - 30)/(350) + .5;
+//                scale = normalizedFactor;
+                scale = handDistance/spread;
             }
+            else {
+                spread = null;
+                bounded = true;
+            }
+        }
+
+        Leap.loop({enableGestures: true}, function(obj) {
+            if (obj.gestures.length > 0) {
+                    obj.gestures.forEach(function(gesture) {
+                        if (gesture.type == "circle") {
+                            handle_circle(gesture);
+                        }
+                });
+            }
+            handle_hand_scaling(obj);
         });
 
 
