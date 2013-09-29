@@ -1,7 +1,7 @@
 
 <html>
     <script src="//js.leapmotion.com/0.2.0/leap.min.js"></script>
-    <!--    <script src="sparks.js"></script> -->
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
     <style>
         body {
             margin: 0px;
@@ -11,8 +11,20 @@
             margin: 0px;
             padding: 0px;
         }
+        div#fader {
+                z-index: 1000;
+                position: absolute;
+                width: 100%;
+                height: 100%;
+                top: 0px;
+                left: 0px;
+                background-color: #fff;
+                display: none;
+        }
     </style>
 <body>
+<div id="fader">
+</div>
 </body>
     <script type="x-shader/x-vertex" id="corona_vtx">
         uniform float amplitude;
@@ -91,6 +103,7 @@
         var lensFlare;
 
         var point_count = 20000;
+
         var using_shaders = true;
 
         var corona_uniforms;
@@ -103,8 +116,13 @@
         var scale = 1;
         var bounded = true;
 
+        var Pool;
+
         init();
         animate();
+
+
+
 
         function create_particle_material() {
             if (using_shaders === false) {
@@ -285,6 +303,25 @@
 
         function init() {
 
+        Pool = {
+            __pools: [],
+             // Get a new Vector
+             get: function() {
+             if ( this.__pools.length > 0 ) {
+                 return this.__pools.pop();
+             }
+             console.log( "pool ran out!" )
+                 return null;
+             },
+
+         // Release a vector back into the pool
+
+        add: function( v ) {
+                 this.__pools.push( v );
+             }
+        };
+
+
             init_threejs();
 
             init_lighting();
@@ -382,7 +419,6 @@
             // scale the star
             if (star_age > 0.9) {
                 scale_star(scale);
-                console.log(scale);
             }
             else if (star_age > 0.3) {
                 var factor = (star_age - 0.3) / 0.7;
@@ -418,6 +454,7 @@
         function explode() {
             allow_scale = false; 
             scene.remove(star_mesh);
+            $("#fader").fadeIn();
         }
 
         function update_scene() {
